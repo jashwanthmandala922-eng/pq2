@@ -1,0 +1,21 @@
+[package]
+name = "securevault-core"
+version = "0.1.0"
+edition = "2021"
+description = "Cross-platform password manager with P2P sync - Post-Quantum"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1.0"
+zeroize = { version = "1.7", features = ["derive"] }
+num-complex = "0.4"
+urlencoding = "2.1"
+hex = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

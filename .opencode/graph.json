@@ -1,0 +1,137 @@
+{
+  "last_updated": "2026-04-30T15:20:19.356319",
+  "codebase": "pq-vault",
+  "changes": [
+    {
+      "timestamp": "2026-04-30T15:20:19.356319",
+      "file": "windows/src/commands.rs",
+      "description": "Added sync_force_retry command for manual sync button",
+      "how": "Added new Tauri command that triggers force retry of all pending sync entries"
+    },
+    {
+      "timestamp": "2026-04-30T14:24:31.219106",
+      "file": "securevault-core/src/p2p/dht_p2p.rs",
+      "description": "Added reliable ACK-based sync protocol with 5-min retry",
+      "how": "Added SyncEntryUpdate message for broadcasting new passwords. Added SyncAck for peer acknowledgment. Added SyncQueue with pending retries every 5 min for 24 hours. Added VectorClock for conflict resolution. Added integrity hash verification. Added new error types for ACK timeout and integrity failure. Tests added for queue, ACK, and vector clock."
+    },
+    {
+      "timestamp": "2026-04-30T14:18:15.889714",
+      "file": "securevault-core/src/p2p/dht_p2p.rs",
+      "description": "Added account-based internet P2P sync",
+      "how": "Added account_id to PeerInfo and P2PSyncManager. Added derive_account_id() to generate account ID from email+salt SHA3 hash. Discovery now uses DHT to find peers with same account over internet - only devices with matching account_id can sync. Added AccountMismatch error for security. Updated tests for new constructors."
+    },
+    {
+      "timestamp": "2026-04-30T14:14:38.238789",
+      "file": "securevault-core/src/p2p/mod.rs",
+      "description": "Added password sync flow documentation",
+      "how": "Added doc comment explaining device-to-device sync: UDP discovery \u2192 TCP connect \u2192 SyncRequest/Response \u2192 encrypted Entry exchange. Includes security notes about ChaCha20 encryption and vector clocks."
+    },
+    {
+      "timestamp": "2026-04-30T14:13:55.047875",
+      "file": "securevault-core/src/lib.rs",
+      "description": "Added password strength verification",
+      "how": "Implemented verify_password_strength function with entropy scoring"
+    }
+  ],
+  "modules": {
+    "securevault-core": {
+      "path": "securevault-core/src",
+      "type": "rust-library",
+      "submodules": [
+        "crypto",
+        "storage",
+        "auth",
+        "p2p",
+        "behavior",
+        "passkey"
+      ],
+      "files": [
+        "securevault-core/src/lib.rs",
+        "securevault-core/src/crypto/poly.rs",
+        "securevault-core/src/crypto/ml_kem.rs",
+        "securevault-core/src/crypto/sha3.rs",
+        "securevault-core/src/crypto/rng.rs",
+        "securevault-core/src/crypto/ml_dsa.rs",
+        "securevault-core/src/crypto/sphincs.rs",
+        "securevault-core/src/crypto/mod.rs",
+        "securevault-core/src/crypto/argon2.rs",
+        "securevault-core/src/crypto/passkey.rs",
+        "securevault-core/src/crypto/hybrid.rs",
+        "securevault-core/src/crypto/totp.rs",
+        "securevault-core/src/crypto/hybrid_crypto.rs",
+        "securevault-core/src/p2p/mod.rs",
+        "securevault-core/src/p2p/dht_p2p.rs",
+        "securevault-core/src/storage/mod.rs",
+        "securevault-core/src/storage/vault_format.rs",
+        "securevault-core/src/behavior/mod.rs",
+        "securevault-core/src/behavior/tflite_analyzer.rs",
+        "securevault-core/src/passkey/mod.rs",
+        "securevault-core/src/auth/mod.rs"
+      ]
+    },
+    "android": {
+      "path": "android/app/src/main/java/com/securevault",
+      "type": "kotlin-android",
+      "files": [
+        "android/app/src/main/java/com/securevault/MainActivity.kt",
+        "android/app/src/main/java/com/securevault/SecureVaultApp.kt",
+        "android/app/src/main/java/com/securevault/crypto/StrongBoxKeymaster.kt",
+        "android/app/src/main/java/com/securevault/auth/SecureVaultAuthManager.kt",
+        "android/app/src/main/java/com/securevault/ui/theme/Type.kt",
+        "android/app/src/main/java/com/securevault/ui/theme/Color.kt",
+        "android/app/src/main/java/com/securevault/ui/components/GlassComponents.kt",
+        "android/app/src/main/java/com/securevault/ui/screens/SettingsScreen.kt",
+        "android/app/src/main/java/com/securevault/ui/screens/LockScreen.kt",
+        "android/app/src/main/java/com/securevault/ui/screens/VaultScreen.kt",
+        "android/app/src/main/java/com/securevault/ui/screens/EntryDetailScreen.kt",
+        "android/app/src/main/java/com/securevault/ui/screens/AddEntryScreen.kt",
+        "android/app/src/main/java/com/securevault/ui/screens/P2PSyncScreen.kt"
+      ],
+      "native": {
+        "cpp": [
+          "securevault_crypto.c",
+          "securevault_crypto.h"
+        ]
+      }
+    },
+    "windows": {
+      "path": "windows/src",
+      "type": "tauri-react",
+      "files": [
+        "windows/src/commands/secureIpc.ts",
+        "windows/src/App.tsx",
+        "windows/src/main.tsx",
+        "windows/src/commands/LoginScreen.tsx",
+        "windows/src/commands/auth.tsx"
+      ]
+    }
+  },
+  "architecture": {
+    "crypto_stack": [
+      "argon2",
+      "x25519",
+      "ml_kem",
+      "sha3",
+      "chacha20",
+      "totp",
+      "passkey"
+    ],
+    "auth_methods": [
+      "master_password",
+      "totp",
+      "passkey",
+      "biometric"
+    ],
+    "platforms": [
+      "android",
+      "windows",
+      "core-rust"
+    ],
+    "key_dependencies": [
+      "lib.rs -> crypto/*",
+      "hybrid.rs -> ml_kem.rs + x25519 + sha3",
+      "storage -> crypto/hybrid",
+      "auth -> storage + crypto/totp + crypto/passkey"
+    ]
+  }
+}

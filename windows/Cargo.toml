@@ -1,0 +1,31 @@
+[package]
+name = "securevault-windows"
+version = "1.0.0"
+description = "SecureVault - Post-Quantum Password Manager"
+authors = ["PQ-Vault Team"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "2.0", features = ["dialog-all", "clipboard-all", "notification-all", "shell-open"] }
+tauri-plugin-shell = "2.0"
+tokio = { version = "1", features = ["full"] }
+log = "0.4"
+env_logger = "0.10"
+
+securevault-core = { path = "../securevault-core" }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

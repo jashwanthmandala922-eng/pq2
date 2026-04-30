@@ -1,0 +1,46 @@
+# Build artifacts
+target/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Android
+android/app/build/
+android/.gradle/
+android/build/
+local.properties
+*.keystore
+*.jks
+
+# iOS/MacOS
+*.xcodeproj
+*.xcworkspace
+*.app
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credential files (never commit!)
+*.env
+*.pem
+*.key
+credentials.json
+
+# Web build
+dist/
+node_modules/
+
+# Test coverage
+coverage/
