@@ -1007,8 +1007,6 @@ mod tests {
         
         assert!(result.is_ok());
     }
-        assert_ne!(id1, id3);
-    }
 
     #[test]
     fn test_peer_account_matching() {

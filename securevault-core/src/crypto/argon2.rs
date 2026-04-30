@@ -39,7 +39,7 @@ impl Argon2id {
         let blocks = self.memory as usize;
         let segment_length = blocks / (self.parallelism as usize * 4);
         
-        let mut memory_blocks: Vec<[[u64; ARGON2_WORDS_PER_BLOCK]> > = Vec::with_capacity(blocks);
+        let mut memory_blocks: Vec<[u64; ARGON2_WORDS_PER_BLOCK]> = Vec::with_capacity(blocks);
         
         let mut initial_block = self.compute_initial_block(password, salt);
         memory_blocks.push(initial_block);

@@ -27,7 +27,7 @@ impl SphincsPublicKey {
     pub fn new() -> Self {
         Self {
             seed: [0u8; 32],
-            root: [u8; 32],
+            root: [0u8; 32],
         }
     }
 }
@@ -72,8 +72,10 @@ fn hash_seed_tree(
     hash
 }
 
-fn compute_root(seeds: &[[u8; 32]; nodes_at_bottom: usize) -> [u8; 32] {
-    let mut nodes = *seeds;
+fn compute_root<const N: usize>(seeds: &[[u8; 32]; N]) -> [u8; 32] {
+    let nodes_at_bottom = N;
+    let mut nodes: Vec<[u8; 32]> = vec![[0u8; 32]; 2 * N + 1];
+    nodes[..N].copy_from_slice(seeds);
 
     let mut offset = nodes_at_bottom;
     let mut count = 0;

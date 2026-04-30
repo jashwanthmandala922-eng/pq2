@@ -11,7 +11,7 @@ const CIPHERTEXT_BYTES: usize = 1088;
 
 #[inline]
 pub fn barrett_reduce(a: i32) -> i32 {
-    let mut t = ((((a as i64) * 5) as i32) >> 26;
+    let mut t = ((((a as i64) * 5) as i32) >> 26);
     t *= Q;
     a - t
 }

@@ -45,7 +45,7 @@ impl Sha3_256 {
             }
 
             if self.offset == self.rate {
-                self.keccak_p(&self.state, 24);
+                Sha3_256::keccak_p(&mut self.state, 24);
                 self.offset = 0;
             }
             input_offset += block_size;
@@ -56,12 +56,12 @@ impl Sha3_256 {
         self.state[self.rate >> 3] ^= (self.delimited_suffix as u64) << ((self.rate & 7) << 3);
         self.state[(self.rate - 1) >> 3] ^= 0x80u64 << (((self.rate - 1) & 7) << 3);
 
-        self.keccak_p(&self.state, 24);
+        Sha3_256::keccak_p(&mut self.state, 24);
         self.squeezing = true;
 
         let mut output = [0u8; 32];
         for i in 0..32 {
-            output[i] = (self.state[i >> ((i & 7) << 3)) as u8;
+            output[i] = (self.state[i >> 3] >> ((i & 7) << 3)) as u8;
         }
         output
     }
@@ -71,7 +71,7 @@ impl Sha3_256 {
 
         let mut round = 12 + 25 - (rounds << 1);
 
-        let mut rc = [0u64; 24] = [
+        let _rc: [u64; 24] = [
             0x0000000000000001, 0x0000000000008082, 0x800000000000808a,
             0x8000000080008000, 0x000000000000008b, 0x000000000000008a,
             0x0000000080000001, 0x8000000000008009, 0x000000000000000a,
