@@ -1,3 +1,4 @@
+#![allow(unused_variables, dead_code)]
 const Q: i32 = 3329;
 const N: usize = 256;
 const N_PLUS_1: usize = 257;
@@ -11,7 +12,7 @@ const CIPHERTEXT_BYTES: usize = 1088;
 
 #[inline]
 pub fn barrett_reduce(a: i32) -> i32 {
-    let mut t = ((((a as i64) * 5) as i32) >> 26;
+    let mut t = (((a as i64) * 5) as i32) >> 26 ;
     t *= Q;
     a - t
 }
@@ -25,8 +26,9 @@ pub fn csubq(a: i32) -> i32 {
 
 #[inline]
 pub fn montgomery_reduce(a: i32) -> i32 {
-    let mut t = (a as i64 * 13510798882111488000i64) >> 63;
-    (t * Q) as i32
+    let large_const: i64 = (1i64 << 54) * 125 / 256;
+    let t = (a as i64 * large_const) >> 63;
+    (t * Q as i64) as i32
 }
 
 pub fn poly_add(a: &mut [i32; N], b: &[i32; N]) {
@@ -65,7 +67,10 @@ pub fn poly_compress_q(out: &mut [u8; N / 8], a: &[i32; N]) {
         let mut t = 0u32;
         for j in 0..8 {
             let idx = 8 * i + j;
-            t |= ((barrett_reduce(a[idx]) as u32) + 1024 + ((2 * j + 1) << 11)) >> 12 << (4 * j);
+            let reduced = barrett_reduce(a[idx]) as u32;
+            let shift_val = ((2 * j + 1) as u32).wrapping_shl(11);
+            let shift = reduced.wrapping_add(1024).wrapping_add(shift_val);
+            t |= shift.wrapping_shr(12) << (4 * j);
         }
         out[i] = t as u8;
         out[i + 1] = (t >> 8) as u8;

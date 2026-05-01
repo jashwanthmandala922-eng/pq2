@@ -103,7 +103,7 @@ impl Default for VaultFileHeader {
 
         let salt = {
             let mut s = [0u8; 32];
-            let mut rng = crate::rng::ChaChaRng::new(b"SecureVault-salt!");
+            let mut rng = crate::crypto::ChaChaRng::new(b"SecureVault-salt!");
             rng.fill_bytes(&mut s);
             s
         };

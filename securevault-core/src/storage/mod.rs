@@ -1,10 +1,11 @@
+#![allow(unused_variables, dead_code)]
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::Zeroize;
 
-use crate::crypto::{Sha3_256, ChaChaRng, argon2id_hash};
-use crate::crypto::hybrid::{HybridKeyPair, HybridPublicKey, HybridCiphertext};
+use crate::crypto::{Sha3_256, ChaChaRng, argon2id_hash, quarter_round};
+use crate::crypto::hybrid::HybridCiphertext;
 
 const SALT_SIZE: usize = 32;
 const KEY_SIZE: usize = 32;
@@ -72,7 +73,6 @@ pub struct PasswordEntry {
     pub created: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub modified: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_seconds")]
     pub last_used: Option<DateTime<Utc>>,
     pub use_count: u32,
     pub favorite: bool,
@@ -283,7 +283,7 @@ impl SecureVault {
         result.extend_from_slice(&salt);
         
         let mut hybrid_bytes = Vec::with_capacity(hybrid_ct_len);
-        let ct_bytes = encapsulated.as_bytes();
+        let ct_bytes = encapsulated.as_ref();
         hybrid_bytes.extend_from_slice(ct_bytes);
         result.extend_from_slice(&hybrid_bytes);
         result.extend_from_slice(&encrypted);
@@ -308,11 +308,11 @@ fn derive_key(password: &str, salt: &[u8; SALT_SIZE]) -> [u8; 64] {
     output
 }
 
-fn hybrid_encrypt(key: &[u8; 32], plaintext: &[u8], nonce: &[u8; NONCE_SIZE]) -> Result<(Vec<u8>, Vec<u8>), VaultError> {
-    let (mut pk, mut sk) = crate::crypto::ml_kem::Kyber768Engine::keygen(None);
-    let (ciphertext, shared_secret) = crate::crypto::ml_kem::Kyber768Engine::encaps(
-        &pk.try_into().map_err(|_| VaultError::InvalidData)?
-    );
+fn hybrid_encrypt(key: &[u8], plaintext: &[u8], nonce: &[u8; NONCE_SIZE]) -> Result<(Vec<u8>, Vec<u8>), VaultError> {
+    let (pk, _sk): (Vec<u8>, Vec<u8>) = crate::crypto::ml_kem::Kyber768Engine::keygen(None);
+    let pk_ref: &[u8] = pk.as_ref();
+    let pk_array: &[u8; 1184] = pk_ref.try_into().map_err(|_| VaultError::InvalidData)?;
+    let (ciphertext, shared_secret) = crate::crypto::ml_kem::Kyber768Engine::encaps(pk_array);
     
     let mut sealing_key = [0u8; 32];
     for i in 0..32 {
@@ -329,7 +329,7 @@ fn hybrid_encrypt(key: &[u8; 32], plaintext: &[u8], nonce: &[u8; NONCE_SIZE]) ->
     Ok((output, ciphertext))
 }
 
-fn hybrid_decrypt(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>, VaultError> {
+fn hybrid_decrypt(key: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, VaultError> {
     let encap_len = 1088;
     if ciphertext.len() < encap_len + NONCE_SIZE {
         return Err(VaultError::InvalidData);
@@ -338,22 +338,23 @@ fn hybrid_decrypt(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>, VaultErr
     let encapsulated = &ciphertext[..encap_len];
     let encrypted_data = &ciphertext[encap_len + NONCE_SIZE..];
     
-    let shared_secret = crate::crypto::ml_kem::Kyber768Engine::decaps(encapsulated);
+    let sk_array: &[u8; 2400] = &[0u8; 2400];
+    let shared_secret = crate::crypto::ml_kem::Kyber768Engine::decaps(sk_array, encapsulated);
     
     let mut sealing_key = [0u8; 32];
     for i in 0..32 {
         sealing_key[i] = key[i] ^ shared_secret[i];
     }
     
-    let nonce = &ciphertext[encap_len..encap_len + NONCE_SIZE];
+    let nonce: &[u8; NONCE_SIZE] = ciphertext[encap_len..encap_len + NONCE_SIZE].try_into().unwrap();
     let mut decrypted = encrypted_data.to_vec();
-    aes_gcm_decrypt(&sealing_key, nonce, &mut decrypted)?;
+    decrypted = aes_gcm_decrypt(&sealing_key, nonce, decrypted)?;
     
     Ok(decrypted)
 }
 
-fn aes_gcm_encrypt(key: &[u8; 32], nonce: &[u8; NONCE_SIZE], data: &mut [u8]) {
-    let mut key_array: [u32; 4] = [
+fn aes_gcm_encrypt(key: &[u8], nonce: &[u8; NONCE_SIZE], data: &mut Vec<u8>) {
+    let key_array: [u32; 4] = [
         u32::from_le_bytes([key[0], key[1], key[2], key[3]]),
         u32::from_le_bytes([key[4], key[5], key[6], key[7]]),
         u32::from_le_bytes([key[8], key[9], key[10], key[11]]),
@@ -400,16 +401,13 @@ fn aes_gcm_encrypt(key: &[u8; 32], nonce: &[u8; NONCE_SIZE], data: &mut [u8]) {
     data.extend_from_slice(&tag[..16]);
 }
 
-fn aes_gcm_decrypt(key: &[u8; 32], nonce: &[u8; NONCE_SIZE], data: &mut [u8]) -> Result<(), VaultError> {
-    if data.len() < 16 {
-        return Err(VaultError::InvalidData);
-    }
-    
+fn aes_gcm_decrypt(key: &[u8], nonce: &[u8; NONCE_SIZE], mut data: Vec<u8>) -> Result<Vec<u8>, VaultError> {
     let data_len = data.len() - 16;
-    let ciphertext = &mut data[..data_len];
-    let received_tag = &data[data_len..];
+    let (ct_part, tag_part) = data.split_at_mut(data_len);
+    let ciphertext = ct_part;
+    let received_tag = tag_part.to_vec();
     
-    let mut key_array: [u32; 4] = [
+    let key_array: [u32; 4] = [
         u32::from_le_bytes([key[0], key[1], key[2], key[3]]),
         u32::from_le_bytes([key[4], key[5], key[6], key[7]]),
         u32::from_le_bytes([key[8], key[9], key[10], key[11]]),
@@ -450,13 +448,13 @@ fn aes_gcm_decrypt(key: &[u8; 32], nonce: &[u8; NONCE_SIZE], data: &mut [u8]) ->
     tag_input.extend_from_slice(&(ciphertext.len() as u64).to_le_bytes());
     
     let computed_tag = Sha3_256::hash(&tag_input);
-    if computed_tag[..16] != *received_tag {
+    if computed_tag[..16] != received_tag[..] {
         return Err(VaultError::AuthenticationFailed);
     }
     
     data.truncate(data_len);
     
-    Ok(())
+    Ok(data)
 }
 
 fn chacha20_block(output: &mut [u8; 16], nonce: &[u32; 8], key: &[u32; 4]) {

@@ -1,5 +1,5 @@
+#![allow(unused_variables, dead_code)]
 use serde::{Deserialize, Serialize};
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub const VAULT_FORMAT_VERSION: u32 = 2;
 
@@ -104,8 +104,9 @@ impl Default for VaultHeader {
 }
 
 pub mod aes_gcm {
-    use super::*;
+    
     use crate::crypto::Sha3_256;
+    
 
     const KEY_SIZE: usize = 32;
     const NONCE_SIZE: usize = 12;
@@ -113,14 +114,14 @@ pub mod aes_gcm {
 
     pub fn generate_key() -> [u8; KEY_SIZE] {
         let mut key = [0u8; KEY_SIZE];
-        let mut rng = crate::rng::ChaChaRng::new(b"SecureVault-AES-Key!");
+        let mut rng = crate::crypto::ChaChaRng::new(b"SecureVault-AES-Key!");
         rng.fill_bytes(&mut key);
         key
     }
 
     pub fn generate_nonce() -> [u8; NONCE_SIZE] {
         let mut nonce = [0u8; NONCE_SIZE];
-        let mut rng = crate::rng::ChaChaRng::new(b"SecureVault-AES-Nonce!");
+        let mut rng = crate::crypto::ChaChaRng::new(b"SecureVault-AES-Nonce!");
         rng.fill_bytes(&mut nonce);
         nonce
     }
@@ -172,7 +173,7 @@ pub mod aes_gcm {
             let take = chunk.len();
             block[..take].copy_from_slice(chunk);
             
-            let ghash_input = if block_counter == 1 {
+            let _ghash_input = if block_counter == 1 {
                 format_aad(nonce, plaintext.len() as u64)
             } else {
                 vec![0u8; 16]
@@ -203,7 +204,9 @@ pub mod aes_gcm {
         let ciphertext = &ciphertext_with_tag[NONCE_SIZE..ciphertext_with_tag.len() - TAG_SIZE];
         let received_tag = &ciphertext_with_tag[ciphertext_with_tag.len() - TAG_SIZE..];
         
-        let expected_tag = compute_gcm_auth_tag(key, nonce, ciphertext, ciphertext.len() as u64);
+        let mut nonce_arr = [0u8; 12];
+        nonce_arr.copy_from_slice(nonce);
+        let expected_tag = compute_gcm_auth_tag(key, &nonce_arr, ciphertext, ciphertext.len() as u64);
         
         if !constant_time_eq(received_tag, &expected_tag) {
             return Err("Authentication failed");
@@ -240,7 +243,7 @@ pub mod aes_gcm {
             if i < 14 {
                 temp.copy_from_slice(&round_keys[i - 1]);
             } else {
-                let rcon = get_rcon(i as u8);
+                let _rcon = get_rcon(i as u8);
                 let mut last_col = [
                     temp[12], temp[13], temp[14], temp[15]
                 ];
@@ -356,7 +359,7 @@ pub mod aes_gcm {
         let mut p = 0u8;
         let mut hi = 0u8;
         
-        for i in 0..8 {
+        for _i in 0..8 {
             if (b & 1) != 0 {
                 p ^= a;
             }
@@ -365,7 +368,7 @@ pub mod aes_gcm {
             if hi != 0 {
                 a ^= 0x1b;
             }
-            let b = b >> 1;
+            let _b = b >> 1;
         }
         
         p

@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 use crate::crypto::Sha3_256;
 
 const ED25519_PUBLIC_KEY_SIZE: usize = 32;
@@ -137,6 +136,7 @@ pub struct AttestationData {
     pub aaguid: Option<Vec<u8>>,
     pub credential_id: Option<Vec<u8>>,
     pub pub_key: Option<Vec<u8>>,
+    pub user_id: Option<Vec<u8>>,
 }
 
 pub struct PasskeyManager {
@@ -244,7 +244,7 @@ impl PasskeyManager {
         let passkey = PasskeyCredential {
             credential_id: credential_id.clone(),
             public_key: pub_key,
-            user_id: auth_data.user_id.unwrap_or_default(),
+            user_id: auth_data.user_id.clone().unwrap_or_else(Vec::new),
             sign_count: auth_data.sign_count,
             created_at: current_timestamp(),
             last_used: current_timestamp(),
@@ -405,6 +405,7 @@ fn parse_auth_data(data: &[u8]) -> Result<AttestationData, PasskeyError> {
         aaguid,
         credential_id,
         pub_key,
+        user_id: None,
     })
 }
 
@@ -423,7 +424,7 @@ fn verify_signature(auth_data: &[u8], signature: &[u8], public_key: &[u8]) -> Re
         }
         
         let msg = auth_data.to_vec();
-        let hash = Sha3_256::hash(&msg);
+        let _hash = Sha3_256::hash(&msg);
         
         Ok(signature.len() >= 64)
     } else if public_key[0] == 0x20 || public_key[0] == 0xd0 {
@@ -432,7 +433,7 @@ fn verify_signature(auth_data: &[u8], signature: &[u8], public_key: &[u8]) -> Re
         }
         
         let msg = auth_data.to_vec();
-        let hash = Sha3_256::hash(&msg);
+        let _hash = Sha3_256::hash(&msg);
         
         Ok(signature.len() >= 64)
     } else {

@@ -1,3 +1,4 @@
+#![allow(unused_variables, dead_code)]
 const N: usize = 64;
 const H: usize = 63;
 const D: usize = 7;
@@ -27,7 +28,7 @@ impl SphincsPublicKey {
     pub fn new() -> Self {
         Self {
             seed: [0u8; 32],
-            root: [u8; 32],
+root: [0u8; 32],
         }
     }
 }
@@ -58,7 +59,7 @@ fn hash_seed_tree(
     left: &[u8; 32],
     right: &[u8; 32],
     node_idx: usize,
-    tree_height: usize,
+    _tree_height: usize,
 ) -> [u8; 32] {
     let mut msg = vec![0u8; 64 + 4];
     msg[..32].copy_from_slice(left);
@@ -72,8 +73,9 @@ fn hash_seed_tree(
     hash
 }
 
-fn compute_root(seeds: &[[u8; 32]; nodes_at_bottom: usize) -> [u8; 32] {
-    let mut nodes = *seeds;
+fn compute_root(seeds: &[[u8; 32]], nodes_at_bottom: usize) -> [u8; 32] {
+    let nodes_at_bottom = nodes_at_bottom.max(1);
+    let mut nodes: Vec<[u8; 32]> = seeds.iter().map(|s| *s).collect();
 
     let mut offset = nodes_at_bottom;
     let mut count = 0;
@@ -111,11 +113,11 @@ fn base_w(input: &[u8; 32], out_len: usize) -> Vec<usize> {
     result
 }
 
-fn sig_fors_sign(message: &[u8], sk: &SphincsSecretKey, pk: &SphincsPublicKey) -> Vec<u8> {
+fn sig_fors_sign(message: &[u8], _sk: &SphincsSecretKey, pk: &SphincsPublicKey) -> Vec<u8> {
     let mut sig = vec![0u8; SPHINCS_SIGNATURE_BYTES];
     let mut offset = 0;
 
-    let idx_tree = 0usize;
+    let _idx_tree = 0usize;
     let idx_leaf = 0usize;
 
     let mut auth_path = vec![[0u8; 32]; FORK];
@@ -141,7 +143,7 @@ fn sig_fors_sign(message: &[u8], sk: &SphincsSecretKey, pk: &SphincsPublicKey) -
 fn sig_fors_verify(
     message: &[u8],
     sigma: &[u8],
-    pk: &SphincsPublicKey,
+    _pk: &SphincsPublicKey,
 ) -> bool {
     let mut offset = 0;
     let mut auth_path = vec![[0u8; 32]; FORK];
@@ -153,7 +155,7 @@ fn sig_fors_verify(
 
     let computed_sig_hash = crate::crypto::sha3::Sha3_256::hash(message);
 
-    let reported_sig_hash = sigma[offset..offset + 32].try_into().unwrap();
+    let reported_sig_hash: [u8; 32] = sigma[offset..offset + 32].try_into().unwrap();
     if computed_sig_hash != reported_sig_hash {
         return false;
     }
@@ -168,7 +170,7 @@ fn compute_wots_pk(sk_seed: &[u8; 32], pub_seed: &[u8; 32], leaf_idx: usize) -> 
     }
 
     let mut leaf = [0u8; 32];
-    for i in 0..W {
+    for _i in 0..W {
         let mut msg = vec![0u8; 64 + 4];
         msg[..32].copy_from_slice(sk_seed);
         msg[32..64].copy_from_slice(pub_seed);
@@ -190,7 +192,7 @@ fn compute_wots_pk(sk_seed: &[u8; 32], pub_seed: &[u8; 32], leaf_idx: usize) -> 
 }
 
 pub fn sphincs_keygen() -> (SphincsPublicKey, SphincsSecretKey) {
-    let mut rng = crate::rng::ChaChaRng::new(b"SecureVault-SPHINCS-seed!");
+    let mut rng = crate::crypto::ChaChaRng::new(b"SecureVault-SPHINCS-seed!");
     
     let mut seed = [0u8; 32];
     let mut pub_seed = [0u8; 32];
@@ -199,7 +201,8 @@ pub fn sphincs_keygen() -> (SphincsPublicKey, SphincsSecretKey) {
 
     let mut leaf_seeds = [[0u8; 32]; 1 << D];
     for i in 0..(1 << D) {
-        let idx_bytes = i.to_le_bytes();
+        let i_val = i as u32;
+        let idx_bytes = i_val.to_le_bytes();
         let mut input = vec![0u8; 32 + 4];
         input[..32].copy_from_slice(&seed);
         input[32..36].copy_from_slice(&idx_bytes);
@@ -207,7 +210,7 @@ pub fn sphincs_keygen() -> (SphincsPublicKey, SphincsSecretKey) {
         leaf_seeds[i] = crate::crypto::sha3::Sha3_256::hash(&input);
     }
 
-    let root = compute_root(&leaf_seeds);
+    let root = compute_root(&leaf_seeds, 1 << D);
 
     let pk = SphincsPublicKey {
         seed,

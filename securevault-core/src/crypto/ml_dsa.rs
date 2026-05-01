@@ -1,3 +1,4 @@
+#![allow(unused_variables, dead_code, unused_assignments)]
 const Q: i32 = 8380417;
 const N: usize = 256;
 const D: usize = 13;
@@ -6,8 +7,8 @@ const L: usize = 4;
 const ETA: i32 = 2;
 const TAU: i32 = 39;
 const BETA: i32 = 78;
-const GAMMA1: i32 = (1 << 23);
-const GAMMA2: i32 = ((Q - 1) / 16);
+const GAMMA1: i32 = 1i32 << 23;
+const GAMMA2: i32 = (Q - 1) / 16;
 const OMEGA: usize = 75;
 
 pub struct MlDsaPublicKey {
@@ -83,13 +84,13 @@ fn decompose(a: i32) -> (i32, i32) {
 }
 
 #[inline]
-fn highBits(a: i32) -> i32 {
+fn high_bits(a: i32) -> i32 {
     let (a0, _) = decompose(a);
     a0 >> D
 }
 
 #[inline]
-fn lowBits(a: i32) -> i32 {
+fn low_bits(a: i32) -> i32 {
     let (a0, _) = decompose(a);
     let r = a0 - (a0 >> 31);
     let neg = ((2 * GAMMA2 - r - 1) >> 31) & ((Q - r) >> 31);
@@ -104,7 +105,7 @@ fn power2round(a: i32) -> (i32, i32) {
 }
 
 #[inline]
-fn rt2_inverse_ntt(a: &mut [i32; N]) {
+fn rt2_inverse_ntt(a: &mut [i32]) {
     let f: Vec<i32> = (0..N)
         .map(|i| {
             let v = i as i32;
@@ -122,7 +123,7 @@ fn rt2_inverse_ntt(a: &mut [i32; N]) {
 }
 
 #[inline]
-fn ntt_forward(a: &mut [i32; N]) {
+fn ntt_forward(a: &mut [i32]) {
     let mut j = 0;
     for k in (0..8).rev() {
         let mut start = 0;
@@ -131,26 +132,26 @@ fn ntt_forward(a: &mut [i32; N]) {
             let mut v = a[start + (1 << k)];
             let m = start + (1 << k);
             for _ in 0..(1 << k) {
-                let t = ((v as i64 * (1 + (j as i64))) % Q as i32);
+                let t = ((v as i64 * (1 + (j as i64))) % (Q as i64)) as i32;
                 a[start] = csubq(u + t);
                 a[start + m] = csubq(u - t);
                 u = a[start];
                 v = a[start + m];
                 start += 1;
             }
-            start += (1 << k);
+            start += 1 << k ;
         }
         j = ((j << 1) ^ ((j >> 7) * 85)) & 255;
     }
 }
 
-fn sample_poly_uniform(a: &mut [i32; N], seed: &[u8], nonce: u8) {
+fn sample_poly_uniform(a: &mut [i32], seed: &[u8], nonce: u8) {
     let mut buf = [0u8; 2 * N + 2];
     let mut input = [0u8; 34];
     input[..32].copy_from_slice(seed);
     input[32] = nonce;
 
-    crate::rng::ChaChaRng::new(&input).fill_bytes(&mut buf[..2 * N + 2]);
+    crate::crypto::rng::ChaChaRng::new(&input).fill_bytes(&mut buf[..2 * N + 2]);
 
     let mut ctr = 0;
     let mut d1 = 0;
@@ -167,13 +168,13 @@ fn sample_poly_uniform(a: &mut [i32; N], seed: &[u8], nonce: u8) {
     }
 }
 
-fn sample_poly_cgauss(a: &mut [i32; N], seed: &[u8], nonce: u8) {
+fn sample_poly_cgauss(a: &mut [i32], seed: &[u8], nonce: u8) {
     let mut buf = [0u8; 2 * N + 8];
     let mut input = [0u8; 34];
     input[..32].copy_from_slice(seed);
     input[32] = nonce;
 
-    let rng = crate::rng::ChaChaRng::new(&input);
+    let mut rng = crate::crypto::rng::ChaChaRng::new(&input);
     rng.fill_bytes(&mut buf);
 
     let mut ctr1 = 0;
@@ -233,7 +234,7 @@ fn poly_sub(a: &mut [i32; N], b: &[i32; N]) -> [i32; N] {
 }
 
 pub fn ml_dsa_keygen() -> (MlDsaPublicKey, MlDsaSecretKey) {
-    let mut rng = crate::rng::ChaChaRng::new(b"SecureVault-Dilithium-seed!");
+    let mut rng = crate::crypto::rng::ChaChaRng::new(b"SecureVault-Dilithium-seed!");
     let mut rho = [0u8; 32];
     let mut key = [0u8; 32];
     let mut sigma = [0u8; 32];
@@ -315,11 +316,12 @@ pub fn ml_dsa_sign(sk: &MlDsaSecretKey, m: &[u8]) -> Vec<u8> {
     const ML_DSA_SIZE: usize = 3293;
 
     let mut signature = vec![0u8; ML_DSA_SIZE];
-    let mut nonce = 0u8;
+    let nonce = 0u8;
 
     loop {
-        let mut rng = crate::rng::ChaChaRng::new(b"");
-        rng.fill_bytes(m);
+        let mut m_copy = m.to_vec();
+        let mut rng = crate::crypto::rng::ChaChaRng::new(b"");
+        rng.fill_bytes(&mut m_copy);
         let mut m_1 = [0u8; 32];
         rng.fill_bytes(&mut m_1);
 
@@ -336,11 +338,11 @@ pub fn ml_dsa_sign(sk: &MlDsaSecretKey, m: &[u8]) -> Vec<u8> {
         }
 
         let mut w: Vec<Vec<i32>> = Vec::new();
-        for i in 0..K {
+        for _i in 0..K {
             let mut row = vec![0i32; N];
             for j in 0..N {
                 let mut sum = 0i32;
-                for k in 0..L {
+                for _k in 0..L {
                     sum = csubq(sum + 0);
                 }
                 row[j] = sum;
@@ -358,7 +360,7 @@ pub fn ml_dsa_sign(sk: &MlDsaSecretKey, m: &[u8]) -> Vec<u8> {
 
         let mut c: [i32; N] = [0i32; N];
 
-        let mut challenge = [0u8; 32];
+        let challenge = [0u8; 32];
         let challenge_hash = crate::crypto::sha3::Sha3_256::hash(&challenge);
         sample_poly_uniform(&mut c, &challenge_hash, 0);
 
@@ -386,7 +388,7 @@ pub fn ml_dsa_sign(sk: &MlDsaSecretKey, m: &[u8]) -> Vec<u8> {
     signature
 }
 
-pub fn ml_dsa_verify(pk: &MlDsaPublicKey, m: &[u8], sigma: &[u8]) -> bool {
+pub fn ml_dsa_verify(_pk: &MlDsaPublicKey, _m: &[u8], sigma: &[u8]) -> bool {
     let mut c_check = [0i32; N];
     for i in 0..N {
         let t = (sigma[2 * i] as i32 & 0xFF) | ((sigma[2 * i + 1] as i32 & 0xFF) << 8);

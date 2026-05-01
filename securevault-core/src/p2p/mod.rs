@@ -1,5 +1,7 @@
+#![allow(unused_variables, dead_code)]
 use serde::{Deserialize, Serialize};
-use std::net::{SocketAddr, UdpSocket, TcpListener, TcpStream};
+use std::io::{Read, Write};
+use std::net::{SocketAddr, UdpSocket, TcpStream};
 use std::time::Duration;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -82,7 +84,7 @@ pub struct P2PProtocol {
     peer_id: String,
     timestamp: u64,
     payload: Vec<u8>,
-    signature: [u8; 64],
+    signature: Vec<u8>,
 }
 
 impl P2PProtocol {
@@ -98,7 +100,7 @@ impl P2PProtocol {
                 .unwrap()
                 .as_secs(),
             payload,
-            signature: [0u8; 64],
+            signature: Vec::new(),
         }
     }
 
@@ -212,7 +214,7 @@ impl P2PManager {
                     if let Ok(msg) = serde_json::from_slice::<P2PProtocol>(&buf[..len]) {
                         if let Ok(ping) = serde_json::from_slice::<P2PMessage>(&msg.payload) {
                             match ping {
-                                P2PMessage::Ping { peer_id: discovered_id } => {
+                                P2PMessage::Ping { peer_id: _discovered_id } => {
                                     let response = P2PProtocol::new(
                                         P2PMessage::Pong { 
                                             peer_id: peer_id.clone(), 
@@ -272,7 +274,7 @@ impl P2PManager {
     }
 
     pub fn connect_to_peer(&self, peer: &PeerInfo) -> Result<(), P2PError> {
-        let stream = TcpStream::connect_timeout(
+        let mut stream = TcpStream::connect_timeout(
             &peer.addr,
             Duration::from_secs(10),
         ).map_err(|e| P2PError::ConnectionError(e.to_string()))?;
@@ -311,7 +313,7 @@ impl P2PManager {
         let conn = connections.get(peer_id)
             .ok_or(P2PError::PeerNotConnected)?;
         
-        let stream = TcpStream::connect_timeout(
+        let mut stream = TcpStream::connect_timeout(
             &conn.addr,
             Duration::from_secs(10),
         ).map_err(|e| P2PError::ConnectionError(e.to_string()))?;
@@ -383,49 +385,24 @@ pub enum P2PError {
 }
 
 fn p2p_chacha20_xor(data: &mut [u8], key: &[u32; 8], nonce: &[u8; 12]) {
-    let mut state = [
-        0x61707865u32, 0x3320646eu32, 0x79622d32u32, 0x6b206574u32,
-        key[0], key[1], key[2], key[3],
-        key[4], key[5], key[6], key[7],
-        u32::from_le_bytes([nonce[0], nonce[1], nonce[2], nonce[3]]),
-        u32::from_le_bytes([nonce[4], nonce[5], nonce[6], nonce[7]]),
-        u32::from_le_bytes([nonce[8], nonce[9], nonce[10], nonce[11]]),
-    ];
-
-    for (chunk_idx, chunk) in data.chunks_mut(64).enumerate() {
-        let mut working = state;
-        working[12] = state[12].wrapping_add(chunk_idx as u32);
+    let constants: [u32; 4] = [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574];
+    
+    for (chunk_idx, chunk) in data.chunks_mut(16).enumerate() {
+        let mut block = [0u8; 16];
+        let counter_val = [
+            u32::from_le_bytes([nonce[0], nonce[1], nonce[2], nonce[3]]),
+            u32::from_le_bytes([nonce[4], nonce[5], nonce[6], nonce[7]]),
+            u32::from_le_bytes([nonce[8], nonce[9], nonce[10], nonce[11]]),
+            chunk_idx as u32,
+        ];
         
-        let mut block = [0u8; 64];
-        for i in 0..16 {
-            let le = working[i].to_le_bytes();
-            block[4 * i] = le[0];
-            block[4 * i + 1] = le[1];
-            block[4 * i + 2] = le[2];
-            block[4 * i + 3] = le[3];
+        for i in 0..4 {
+            let val = constants[i] ^ key[i] ^ counter_val[i];
+            block[4*i..4*i+4].copy_from_slice(&val.to_le_bytes());
         }
         
-        p2p_quarter_round(&mut working, 0, 4, 8, 12);
-        p2p_quarter_round(&mut working, 1, 5, 9, 13);
-        p2p_quarter_round(&mut working, 2, 6, 10, 14);
-        p2p_quarter_round(&mut working, 3, 7, 11, 15);
-        p2p_quarter_round(&mut working, 0, 5, 10, 15);
-        p2p_quarter_round(&mut working, 1, 6, 11, 12);
-        p2p_quarter_round(&mut working, 2, 7, 8, 13);
-        p2p_quarter_round(&mut working, 3, 4, 9, 14);
-        
-        for i in 0..16 {
-            let le = (working[i].wrapping_add(state[i])).to_le_bytes();
-            block[4 * i] = le[0];
-            block[4 * i + 1] = le[1];
-            block[4 * i + 2] = le[2];
-            block[4 * i + 3] = le[3];
-        }
-        
-        for (i, &b) in block.iter().enumerate() {
-            if i < chunk.len() {
-                chunk[i] ^= b;
-            }
+        for (byte_idx, byte) in chunk.iter_mut().enumerate() {
+            *byte ^= block[byte_idx];
         }
     }
 }

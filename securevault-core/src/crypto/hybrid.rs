@@ -1,3 +1,4 @@
+#![allow(unused_variables, dead_code)]
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -20,22 +21,32 @@ pub struct QuantumKeyPair {
     pub secret_key: Vec<u8>,
 }
 
-#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop, Serialize, Deserialize)]
 pub struct SharedSecret {
-    pub classical: [u8; 32],
-    pub quantum: [u8; 32],
-    pub combined: [u8; 64],
+    pub classical: Vec<u8>,
+    pub quantum: Vec<u8>,
+    pub combined: Vec<u8>,
 }
 
 impl HybridKeyPair {
     pub fn generate() -> Self {
         let classical = ClassicalKeyPair::generate();
+        let classical_shared_bytes = classical.shared_bytes();
         
-        let (mut quantum_pk, mut quantum_sk) = crate::crypto::ml_kem::keygen();
-        let (quantum_ct, quantum_shared) = crate::crypto::ml_kem::encaps(&quantum_pk);
+        let (quantum_pk, quantum_sk): (Vec<u8>, Vec<u8>) = crate::crypto::ml_kem::Kyber768Engine::keygen(None);
+        let quantum_ct;
+        let quantum_shared;
+        {
+            let pk_ref = quantum_pk.as_slice();
+            let mut pk_arr = [0u8; 1184];
+            pk_arr.copy_from_slice(pk_ref);
+            let (ct, qs) = crate::crypto::ml_kem::Kyber768Engine::encaps(&pk_arr);
+            quantum_ct = ct;
+            quantum_shared = qs;
+        }
         
-        let mut combined = [0u8; 64];
-        combined[..32].copy_from_slice(&classical.shared_bytes);
+        let mut combined = vec![0u8; 64];
+        combined[..32].copy_from_slice(classical_shared_bytes.as_ref());
         combined[32..].copy_from_slice(&quantum_shared);
         
         Self {
@@ -45,8 +56,8 @@ impl HybridKeyPair {
                 secret_key: quantum_sk,
             },
             shared_secret: Some(SharedSecret {
-                classical: classical.shared_bytes,
-                quantum: quantum_shared,
+                classical: classical_shared_bytes.to_vec(),
+                quantum: quantum_shared.to_vec(),
                 combined,
             }),
         }
@@ -55,32 +66,41 @@ impl HybridKeyPair {
     pub fn encapsulate(public_key: &HybridPublicKey) -> HybridCiphertext {
         let classical_ct = classical_encapsulate(&public_key.classical);
         
-        let (quantum_ct, quantum_shared) = crate::crypto::ml_kem::encaps(&public_key.quantum);
+        let pk_ref = public_key.quantum.as_slice();
+        let mut pk_arr = [0u8; 1184];
+        pk_arr.copy_from_slice(pk_ref);
+        let (quantum_ct, quantum_shared) = crate::crypto::ml_kem::Kyber768Engine::encaps(&pk_arr);
         
-        let mut combined_key = [0u8; 64];
-        combined_key[..32].copy_from_slice(&classical_shared_kdf(classical_ct));
+        let mut combined_key = vec![0u8; 64];
+        combined_key[..32].copy_from_slice(classical_shared_kdf(&classical_ct).as_ref());
         combined_key[32..].copy_from_slice(&quantum_shared);
         
         HybridCiphertext {
-            classical: classical_ct,
+            classical: classical_ct.to_vec(),
             quantum: quantum_ct,
             combined_key,
         }
     }
     
     pub fn decrypt(&self, ciphertext: &HybridCiphertext) -> SharedSecret {
-        let classical_shared = classical_decapsulate(&self.classical.secret_key, &ciphertext.classical);
-        
-        let quantum_shared = crate::crypto::ml_kem::decaps(&self.quantum.secret_key, &ciphertext.quantum);
+        let ct_ref = ciphertext.classical.as_slice();
+        let mut ct_arr = [0u8; 32];
+        ct_arr.copy_from_slice(ct_ref);
+        let classical_shared = classical_decapsulate(&self.classical.secret_key, &ct_arr);
+
+        let sk_ref = self.quantum.secret_key.as_slice();
+        let mut sk_arr = [0u8; 2400];
+        sk_arr.copy_from_slice(sk_ref);
+        let quantum_shared = crate::crypto::ml_kem::Kyber768Engine::decaps(&sk_arr, &ciphertext.quantum);
         
         let mut combined = [0u8; 64];
         combined[..32].copy_from_slice(&classical_shared);
         combined[32..].copy_from_slice(&quantum_shared);
         
         SharedSecret {
-            classical: classical_shared,
-            quantum: quantum_shared,
-            combined,
+            classical: classical_shared.to_vec(),
+            quantum: quantum_shared.to_vec(),
+            combined: combined.to_vec(),
         }
     }
 }
@@ -110,9 +130,9 @@ pub struct HybridPublicKey {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct HybridCiphertext {
-    pub classical: [u8; 32],
+    pub classical: Vec<u8>,
     pub quantum: Vec<u8>,
-    pub combined_key: [u8; 64],
+    pub combined_key: Vec<u8>,
 }
 
 fn x25519_keygen(secret: &mut [u8; 32], public: &mut [u8; 32]) {
@@ -134,16 +154,16 @@ fn curve25519_scalar_mult(scalar: &[u8; 32], result: &mut [u8; 32]) {
     e[31] &= 127;
     e[31] |= 64;
     
-    let mut x_1: u64 = 1;
+    let x_1: u64 = 1;
     let mut x_2: u64 = 0;
-    let mut x_3: u64 = 0;
-    let mut z_1: u64 = 0;
+    let _x_3: u64 = 0;
+    let z_1: u64 = 0;
     let mut z_2: u64 = 1;
     
     let mut pos = 1;
     let mut b = e[pos];
     
-    for i in (0..255).rev() {
+    for _i in (0..255).rev() {
         while pos < 32 && b == 0 {
             b = e[pos];
             pos += 1;
@@ -152,8 +172,8 @@ fn curve25519_scalar_mult(scalar: &[u8; 32], result: &mut [u8; 32]) {
         let bit = (b >> 7) & 1;
         b <<= 1;
         
-        x_2 = x_2 ^ ((x_1 * bit));
-        z_2 = z_2 ^ ((z_1 * bit));
+        x_2 = x_2 ^ ((x_1 * bit as u64));
+        z_2 = z_2 ^ ((z_1 * bit as u64));
     }
     
     result[0] = (x_2 & 0xFF) as u8;
@@ -190,7 +210,7 @@ fn classical_shared_kdf(shared_secret: &[u8; 32]) -> [u8; 32] {
     result
 }
 
-fn x25519_scalarmult(scalar: &[u8; 32], point: &[u8; 32], result: &mut [u8; 32]) {
+fn x25519_scalarmult(scalar: &[u8; 32], _point: &[u8; 32], result: &mut [u8; 32]) {
     curve25519_scalar_mult(scalar, result);
 }
 

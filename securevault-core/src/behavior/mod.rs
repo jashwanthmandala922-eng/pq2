@@ -1,6 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
-use std::time::{Duration, Instant};
 
 const MAX_SAMPLES: usize = 500;
 const TYPING_WINDOW_MS: u64 = 100;
@@ -35,7 +33,7 @@ pub struct MouseEvent {
     pub event_type: MouseEventType,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum MouseEventType {
     Move,
     Click,
@@ -128,7 +126,7 @@ pub struct MouseBaseline {
     pub scroll_pattern: f32,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Direction {
     Up,
     Down,
@@ -137,7 +135,7 @@ pub enum Direction {
     Diagonal,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MovementPattern {
     Smooth,
     Jerky,
@@ -185,8 +183,8 @@ impl BehavioralAnalyzer {
         let digraphs = calculate_digraphs(samples);
         let digraph_durations: Vec<f64> = digraphs.values().cloned().collect();
         if !digraph_durations.is_empty() {
-            keystroke_dynamics.avg_digraph_duration = mean(&digraph_durations);
-            keystroke_dynamics.digraph_variance = std_deviation(&digraph_durations);
+            keystroke_dynamics.avg_digraph_duration = mean_f64(&digraph_durations);
+            keystroke_dynamics.digraph_variance = std_deviation_f64(&digraph_durations);
         }
 
         let typing_pattern = classify_typing_pattern(samples);
@@ -268,7 +266,7 @@ impl BehavioralAnalyzer {
 
         let moves_len = moves.len();
         let clicks = samples.iter().filter(|e| matches!(e.event_type, MouseEventType::Click | MouseEventType::DoubleClick)).count();
-        let click_frequency = clicks as f32 / moves_len as f32;
+        let _click_frequency = clicks as f32 / moves_len as f32;
 
         let pattern = classify_movement_pattern(samples);
 
@@ -387,7 +385,7 @@ impl TypingBaseline {
         Self {
             avg_latency: mean(&latencies),
             std_dev: std_deviation(&latencies),
-            key_latencies,
+            key_latencies: std::collections::HashMap::new(),
             digraph_latencies: std::collections::HashMap::new(),
             trigraph_latencies: std::collections::HashMap::new(),
         }
@@ -549,6 +547,20 @@ fn std_deviation(data: &[u64]) -> f64 {
     variance.sqrt()
 }
 
+fn mean_f64(data: &[f64]) -> f64 {
+    if data.is_empty() { return 0.0; }
+    data.iter().sum::<f64>() / data.len() as f64
+}
+
+fn std_deviation_f64(data: &[f64]) -> f64 {
+    if data.len() < 2 { return 0.0; }
+    let m = mean_f64(data);
+    let variance = data.iter()
+        .map(|x| (*x - m).powi(2))
+        .sum::<f64>() / (data.len() - 1) as f64;
+    variance.sqrt()
+}
+
 fn mean_f32(data: &[f32]) -> f32 {
     if data.is_empty() { return 0.0; }
     data.iter().sum::<f32>() / data.len() as f32
@@ -559,18 +571,18 @@ fn mean_u64(data: &[u64]) -> f64 {
     data.iter().sum::<u64>() as f64 / data.len() as f64
 }
 
-fn calculate_digraphs(samples: &[TypingEvent]) -> std::collections::HashMap<String, u64> {
-    let mut digraphs = std::collections::HashMap::new();
+fn calculate_digraphs(samples: &[TypingEvent]) -> std::collections::HashMap<String, f64> {
+    let mut digraph_map = std::collections::HashMap::new();
     let chars: Vec<char> = samples.iter().map(|e| e.key).collect();
     
     for window in chars.windows(2) {
-        let digraph = format!("{}{}", window[0], window[1]);
+        let digraph_key = format!("{}{}", window[0], window[1]);
         if let Some(idx) = chars.windows(2).position(|w| w[0] == window[0] && w[1] == window[1]) {
-            let latency = samples.get(idx).map(|e| e.latency_ms).unwrap_or(0);
-            *digraph.entry(digraph).or_insert(0) += latency;
+            let latency = samples.get(idx).map(|e| e.latency_ms as f64).unwrap_or(0.0);
+            *digraph_map.entry(digraph_key).or_insert(0.0) += latency;
         }
     }
-    digraphs
+    digraph_map
 }
 
 fn classify_typing_pattern(samples: &[TypingEvent]) -> TypingPattern {

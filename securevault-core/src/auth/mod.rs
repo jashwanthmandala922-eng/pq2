@@ -1,3 +1,4 @@
+#![allow(unused_variables, dead_code)]
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -58,7 +59,7 @@ impl Zeroize for LoginConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AuthError {
     InvalidMasterPassword,
     InvalidTotpCode,
@@ -108,10 +109,15 @@ impl Zeroize for PasskeyCredentialRef {
     }
 }
 
-#[derive(ZeroizeOnDrop)]
-struct ZeroizingMasterKey {
-    #[zeroize(skip)]
+#[derive(ZeroizeOnDrop, Default)]
+pub struct ZeroizingMasterKey {
     key: Vec<u8>,
+}
+
+impl Zeroize for ZeroizingMasterKey {
+    fn zeroize(&mut self) {
+        self.key.zeroize();
+    }
 }
 
 impl AuthenticationSession {
@@ -297,7 +303,7 @@ impl AuthenticationSession {
         }
     }
 
-    pub fn is_locked(&self) -> bool {
+pub fn is_locked(&mut self) -> bool {
         if let Some(lockout) = self.config.lockout_until {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -309,7 +315,7 @@ impl AuthenticationSession {
             self.config.lockout_until = None;
             self.config.failed_attempts = 0;
         }
-        false
+        self.state != LoginState::Authenticated || self.session_start.is_none()
     }
 
     fn authenticate_success(&mut self) {
@@ -327,7 +333,7 @@ impl AuthenticationSession {
         self.config.failed_attempts += 1;
         
         if self.config.failed_attempts >= self.max_failed_attempts {
-            let lockout_duration = 300u64 * (self.config.failed_attempts / self.max_failed_attempts);
+            let lockout_duration = 300u64 * (self.config.failed_attempts as u64 / self.max_failed_attempts as u64);
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

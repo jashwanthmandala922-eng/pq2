@@ -6,6 +6,23 @@ on:
   workflow_dispatch:
 
 jobs:
+  build-rust:
+    name: Build & Test Rust Core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+
+      - name: Check Rust Core
+        run: cd securevault-core && cargo check
+
+      - name: Build Rust Core
+        run: cd securevault-core && cargo build
+
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest

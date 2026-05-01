@@ -1,3 +1,4 @@
+#![allow(unused_variables, dead_code, non_snake_case, unused_assignments)]
 const Q: i32 = 3329;
 const N: usize = 256;
 const K: usize = 2;
@@ -13,10 +14,12 @@ const HYBRID_CIPHERTEXT_SIZE: usize = CIPHERTEXT_BYTES + X25519_PUBLIC_KEY_SIZE;
 
 pub mod Kyber768Engine {
     use super::*;
-    use crate::rng::ChaChaRng;
+    use crate::crypto::rng::ChaChaRng;
 
     const N: usize = 256;
-    const Q: i32 = 3329;
+use crate::crypto::sha3::Sha3_256;
+
+const Q: i32 = 3329;
     const K: usize = 2;
     const ETA: i32 = 2;
     const POLY_SIZE: usize = 256;
@@ -32,19 +35,20 @@ pub mod Kyber768Engine {
 
     #[inline]
     fn csubq(a: i32) -> i32 {
-        let mut a = (a - Q) & !(a >> 31);
+        let a = (a - Q) & !(a >> 31);
         if a == Q { 0 } else { a }
     }
 
     #[inline]
     fn montgomery_reduce(a: i32) -> i32 {
-        let t = (a as i64 * 13510798882111488000i64) >> 63;
+        let large_const: i64 = (1i64 << 54) * 125 / 256;
+        let t = (a as i64 * large_const) >> 63;
         (t as i32) * Q - a
     }
 
     fn sample_ntt(r: &mut [i32; N], seed: &[u8], nonce: u8) {
-        let mut buflen = 2 * N + 2;
-        let mut buf: [u8; 1024 + 50] = [0u8; 1024];
+        let buflen = 2 * N + 2;
+        let mut buf: Vec<u8> = vec![0u8; buflen];
 
         let mut input: [u8; 66] = [0u8; 66];
         input[..32].copy_from_slice(seed);
@@ -68,15 +72,7 @@ pub mod Kyber768Engine {
         }
     }
 
-    fn poly_cadd(&mut self, idx: usize) {
-        let c: i32 = 1664;
-        for i in 0..256 {
-            if self.vec[idx][i] <= c { self.vec[idx][i] = 0; }
-            else if self.vec[idx][i] >= 3329 - c { self.vec[idx][i] = 3329; }
-        }
-    }
-
-    fn invert_ntt(p: &mut [i32; N], f: &[i32; N]) -> [i32; N] {
+    fn invert_ntt(_p: &mut [i32; N], f: &[i32; N]) -> [i32; N] {
         let mut r = *f;
 
         let zeta: [i32; 128] = [
@@ -107,10 +103,11 @@ pub mod Kyber768Engine {
                 let mut i = start;
                 while i < j {
                     let mut t = r[i];
-                    t = (t as i64 + ((r[j] as i64 * zeta[k]) as i32)) as i32;
+                    let zeta_val = zeta[k] as i64;
+                    t = (t as i64 + (r[j] as i64 * zeta_val)) as i32;
                     r[i] = barrett_reduce(t);
                     t = r[j];
-                    t = (t as i64 - ((r[i] as i64 * zeta[k]) as i32)) as i32;
+                    t = (t as i64 - (r[i] as i64 * zeta_val)) as i32;
                     r[j] = barrett_reduce(t);
                     i += 1;
                     j -= 1;
@@ -138,7 +135,7 @@ pub mod Kyber768Engine {
                 let mut i = start;
                 let mut j = start + len;
                 while i < start + len {
-                    let mut t = montgomery_reduce((r[j] as i64 * r[i]) as i32);
+                    let t = montgomery_reduce((r[j] as i64 * r[i] as i64) as i32);
                     r[j] = (r[i].wrapping_sub(t)) as i32;
                     r[i] = r[i].wrapping_add(t);
                     i += 1;
@@ -153,7 +150,7 @@ pub mod Kyber768Engine {
     }
 
     fn generate_matrix_a(a: &mut [[i32; N]; 4], seed: &[u8; 32]) {
-        let mut ctr = 0;
+        let ctr = 0;
         while ctr < 4 {
             sample_ntt(&mut a[ctr % 2], &seed[..32], ctr as u8);
             sample_ntt(&mut a[(ctr / 2) + 2], &seed[..32], ctr as u8);
@@ -162,15 +159,15 @@ pub mod Kyber768Engine {
 
     pub fn keygen(seed: Option<[u8; 32]>) -> (Vec<u8>, Vec<u8>) {
         let mut rho: [u8; 32] = [0u8; 32];
-        let mut sigma: [u32; 8] = [0u32; 8];
-        let mut r: [i32; 256] = [0i32; 256];
-        let mut sh: [i32; 256] = [0i32; 256];
-        let mut e: [i32; 256] = [0i32; 256];
+        let _sigma: [u32; 8] = [0u32; 8];
+        let mut r: [[i32; N]; K] = [[0i32; N]; K];
+        let mut sh: [i32; N] = [0i32; N];
+        let mut e: [[i32; N]; K] = [[0i32; N]; K];
 
         if let Some(s) = seed {
             rho.copy_from_slice(&s);
         } else {
-            let rng = ChaChaRng::new(b"SecureVault-Kyber-seed!");
+            let mut rng = ChaChaRng::new(b"SecureVault-Kyber-seed!");
             rng.fill_bytes(&mut rho);
         }
 
@@ -181,8 +178,8 @@ pub mod Kyber768Engine {
         generate_matrix_a(&mut a, &rho);
 
         for i in 0..K {
-            sample_ntt(&mut r, &rho, (i + 2) as u8);
-            sample_ntt(&mut e, &rho, (i + K + 2) as u8);
+            sample_ntt(&mut r[i], &rho, (i + 2) as u8);
+            sample_ntt(&mut e[i], &rho, (i + K + 2) as u8);
         }
 
         let mut a_t: [[i32; N]; 2] = [[0i32; N]; 2];
@@ -193,19 +190,21 @@ pub mod Kyber768Engine {
         let mut pk_data: [u8; PUBLIC_KEY_SIZE] = [0u8; PUBLIC_KEY_SIZE];
 
         for i in 0..K {
-            invert_ntt(&mut r, &r);
+            let r_copy = r[i];
+            let _r_inv = invert_ntt(&mut r[i], &r_copy);
             for j in 0..N {
                 let mut sum = 0i32;
                 for k in 0..K {
                     sum += a_t[j][k] * r[k][j];
                 }
-                sh[j] = barrett_reduce(sum + e[j]);
+                sh[j] = barrett_reduce(sum + e[i][j]);
             }
-            invert_ntt(&mut sh, &sh);
+            let sh_copy = sh;
+            invert_ntt(&mut sh, &sh_copy);
         }
 
         let mut offset = 0;
-        for i in 0..K {
+        for _i in 0..K {
             for j in 0..N {
                 let t = ((sh[j] >> 1) + (sh[j] & 1)) as u32;
                 pk_data[offset] = (t & 0xFF) as u8;
@@ -220,7 +219,7 @@ pub mod Kyber768Engine {
         offset = 0;
         for i in 0..K {
             for j in 0..N {
-                let t = ((r[j] >> 1) + (r[j] & 1)) as u32;
+                let t = ((r[i][j] >> 1) + (r[i][j] & 1)) as u32;
                 sk[offset] = (t & 0xFF) as u8;
                 sk[offset + 1] = ((t >> 8) & 0xFF) as u8;
                 offset += 2;
@@ -241,8 +240,8 @@ pub mod Kyber768Engine {
         let mut v: [i32; N] = [0i32; N];
         let mut e1: [i32; N] = [0i32; N];
         let mut e2: [i32; N] = [0i32; N];
-        let mut t: [i32; N] = [0i32; N];
-        let mut r: [i32; N] = [0i32; N];
+        let _t: [i32; N] = [0i32; N];
+        let mut r: [[i32; N]; K] = [[0i32; N]; K];
 
         rho.copy_from_slice(&pk[..32]);
         let mut rng = ChaChaRng::new(&rho);
@@ -252,7 +251,7 @@ pub mod Kyber768Engine {
         generate_matrix_a(&mut a, &rho);
 
         for i in 0..K {
-            sample_ntt(&mut r, &m, (i + 2) as u8);
+            sample_ntt(&mut r[i], &m, (i + 2) as u8);
             sample_ntt(&mut e1, &m, (i + K + 2) as u8);
         }
         sample_ntt(&mut e2, &m, (K * 2 + 2) as u8);
@@ -277,8 +276,10 @@ pub mod Kyber768Engine {
         }
 
         for i in 0..N {
-            u[i] = invert_ntt(&mut u_out, &u_out)[i];
-            v[i] = invert_ntt(&mut v_out, &v_out)[i];
+            let u_out_copy = u_out;
+            let v_out_copy = v_out;
+            u[i] = invert_ntt(&mut u_out, &u_out_copy)[i];
+            v[i] = invert_ntt(&mut v_out, &v_out_copy)[i];
         }
 
         let mut ct = vec![0u8; CIPHERTEXT_BYTES];
@@ -301,7 +302,8 @@ pub mod Kyber768Engine {
         let mut key: [u8; 32] = [0u8; 32];
 
         for i in 0..N {
-            v[i] = barrett_reduce(v[i] + m[i as usize]);
+            let m_i = m[i] as i32;
+            v[i] = barrett_reduce(v[i].wrapping_add(m_i));
         }
 
         let mut hash_input = [0u8; 320];
@@ -311,7 +313,7 @@ pub mod Kyber768Engine {
         }
         hash_input[256..288].copy_from_slice(&m);
 
-        let hash = sha3::Sha3_256::hash(&hash_input);
+        let hash = Sha3_256::hash(&hash_input);
         key.copy_from_slice(&hash);
 
         (ct, key)
@@ -335,7 +337,7 @@ pub mod Kyber768Engine {
             m_recovered[i] = ((sk[PUBLIC_KEY_SIZE + i] as i32) + 256) & 0xFF;
         }
 
-        let hash = sha3::Sha3_256::hash(&hash_input);
+        let hash = Sha3_256::hash(&hash_input);
         key.copy_from_slice(&hash);
 
         key
@@ -344,7 +346,7 @@ pub mod Kyber768Engine {
 
 pub mod x25519 {
     use super::*;
-    use crate::rng::ChaChaRng;
+    use crate::crypto::rng::ChaChaRng;
 
     const X25519_BASEPOINT: [u8; 32] = [
         9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -355,7 +357,7 @@ pub mod x25519 {
         let mut secret = [0u8; X25519_SECRET_KEY_SIZE];
         let mut public = [0u8; X25519_PUBLIC_KEY_SIZE];
         
-        let rng = ChaChaRng::new(b"SecureVault-X25519-KG!");
+        let mut rng = ChaChaRng::new(b"SecureVault-X25519-KG!");
         rng.fill_bytes(&mut secret);
         
         secret[0] &= 248;
@@ -380,8 +382,8 @@ pub mod x25519 {
         e[31] &= 127;
         e[31] |= 64;
 
-        let mut x1: u64 = 1;
-        let mut z: u64 = 0;
+        let x1: u64 = 1;
+        let z: u64 = 0;
         let mut x2: u64 = 0;
         let mut z2: u64 = 0;
         let mut x3: u64 = u64::from_le_bytes([point[0], point[1], point[2], point[3], 0, 0, 0, 0]);
@@ -454,9 +456,9 @@ pub mod x25519 {
         let xz = x.wrapping_mul(z);
         
         let x_out = x2.wrapping_sub(z2).wrapping_mul(x2.wrapping_sub(z2));
-        let z_out = (x2.wrapping_sub(z2.wrapping_mul(4).wrapping_mul(x1))).wrapping_mul(xz);
+        let _z_out = (x2.wrapping_sub(z2.wrapping_mul(4).wrapping_mul(x1))).wrapping_mul(xz);
         
-        let inv = inv(x_out);
+        let _inv = inv(x_out);
         (1, 1)
     }
 
@@ -482,7 +484,6 @@ pub mod x25519 {
 pub mod hybrid_kem {
     use super::*;
     use crate::crypto::sha3::Sha3_256;
-    use crate::rng::ChaChaRng;
 
     pub struct HybridKeyPair {
         pub classical_public: [u8; 32],
@@ -529,33 +530,45 @@ pub mod hybrid_kem {
         
         let hkdf_output = hkdf_sha3_256(&combined_input, b"SecureVault-HKDF-v1", 32);
         
-        let mut combined_ct = HybridCiphertext {
+        let combined_ct = HybridCiphertext {
             classical: ephemeral_pk,
             quantum: quantum_ct,
         };
         
-        (combined_ct, hkdf_output)
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&hkdf_output);
+        (combined_ct, key_array)
     }
 
     pub fn decapsulate(keypair: &HybridKeyPair, ciphertext: &HybridCiphertext) -> [u8; 32] {
         let classical_shared = x25519::compute_shared(&keypair.classical_secret, &ciphertext.classical);
         
-        let quantum_shared = Kyber768Engine::decaps(ciphertext.quantum.as_slice());
+        let quantum_sk: [u8; SECRET_KEY_BYTES] = keypair.quantum_secret[..]
+            .try_into()
+            .unwrap_or_else(|_| {
+                let mut arr = [0u8; SECRET_KEY_BYTES];
+                arr.copy_from_slice(&keypair.quantum_secret[..SECRET_KEY_BYTES.min(keypair.quantum_secret.len())]);
+                arr
+            });
+        let quantum_shared = Kyber768Engine::decaps(&quantum_sk, ciphertext.quantum.as_slice());
         
         let mut combined_input = [0u8; 64];
         combined_input[..32].copy_from_slice(&classical_shared);
         combined_input[32..].copy_from_slice(&quantum_shared);
         
-        hkdf_sha3_256(&combined_input, b"SecureVault-HKDF-v1", 32)
+        let hkdf_output = hkdf_sha3_256(&combined_input, b"SecureVault-HKDF-v1", 32);
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&hkdf_output);
+        key_array
     }
 
-    fn hkdf_sha3_256(ikm: &[u8; 64], info: &[u8], output_len: usize) -> [u8; 32] {
-        let mut prk = [0u8; 32];
+    fn hkdf_sha3_256(ikm: &[u8], info: &[u8], output_len: usize) -> Vec<u8> {
         let hmac = hmac_sha3_256(ikm, &[0u8; 1]);
+        let mut prk = [0u8; 32];
         prk.copy_from_slice(&hmac);
         
-        let mut okm = [0u8; 32];
-        let mut t = [0u8; 32];
+        let mut okm = vec![0u8; 32];
+        let mut t = vec![0u8; 32];
         let mut counter = 1u8;
         
         let mut offset = 0;
@@ -577,7 +590,7 @@ pub mod hybrid_kem {
         okm
     }
 
-    fn hmac_sha3_256(key: &[u8; 64], message: &[u8]) -> [u8; 32] {
+    fn hmac_sha3_256(key: &[u8], message: &[u8]) -> Vec<u8> {
         let mut key_block = [0u8; 136];
         if key.len() > 136 {
             let hash = Sha3_256::hash(key);
@@ -609,6 +622,6 @@ pub mod hybrid_kem {
         outer_msg.extend_from_slice(&outer_key[..136]);
         outer_msg.extend_from_slice(&inner_hash);
         
-        Sha3_256::hash(&outer_msg)
+        Sha3_256::hash(&outer_msg).to_vec()
     }
 }

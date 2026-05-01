@@ -1,5 +1,5 @@
+#![allow(unused_variables, dead_code, unused_imports, unused_assignments)]
 use serde::{Deserialize, Serialize};
-use zeroize::Zeroize;
 
 pub mod crypto;
 pub mod storage;

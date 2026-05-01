@@ -1,5 +1,5 @@
-use zeroize::Zeroize;
 use crate::crypto::Sha3_256;
+use crate::crypto::rng::ChaChaRng;
 
 const TOTP_STEP_SECONDS: u64 = 30;
 const TOTP_DIGITS: usize = 6;
@@ -68,7 +68,7 @@ impl TotpManager {
             key_block[..self.secret.len()].copy_from_slice(&self.secret);
         }
         
-        for (i, byte) in key_block.iter_mut().enumerate() {
+        for (_i, byte) in key_block.iter_mut().enumerate() {
             *byte ^= 0x5c;
         }
         

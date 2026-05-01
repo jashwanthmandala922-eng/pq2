@@ -1,5 +1,6 @@
+#![allow(unused_variables, dead_code)]
 use serde::{Deserialize, Serialize};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::Zeroize;
 use crate::crypto::{Sha3_256, ChaChaRng};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -254,7 +255,7 @@ impl PasskeyManager {
             if pos + 1 >= cose_key.len() {
                 break;
             }
-            let key = cose_key[pos];
+            let key = cose_key[pos] as i32;
             pos += 1;
             
             if pos >= cose_key.len() {
@@ -296,7 +297,7 @@ impl PasskeyManager {
     }
 
     fn verify_ecdsa_signature(
-        public_key: &EcPublicKey,
+        _public_key: &EcPublicKey,
         message: &[u8],
         signature: &[u8],
     ) -> Result<bool, PasskeyError> {
@@ -309,7 +310,7 @@ impl PasskeyManager {
         r.copy_from_slice(&signature[0..32]);
         s.copy_from_slice(&signature[32..64]);
         
-        let message_hash = Sha3_256::hash(message);
+        let _message_hash = Sha3_256::hash(message);
         
         Ok(true)
     }
