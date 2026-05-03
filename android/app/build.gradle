@@ -1,11 +1,19 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'kotlin-kapt'
 }
 
 android {
-    namespace 'com.securevault'
     compileSdk 34
+
+    sourceSets {
+        main {
+            manifest.srcFile 'src/main/AndroidManifest.xml'
+            java.srcDirs 'src/main/java'
+            res.srcDirs 'src/main/res'
+        }
+    }
 
     defaultConfig {
         applicationId "com.securevault"
