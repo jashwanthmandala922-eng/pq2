@@ -1,79 +1,33 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.securevault.app",
+  "productName": "SecureVault",
+  "version": "1.0.0",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist",
-    "devtools": true
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
   },
-  "package": {
-    "productName": "SecureVault",
-    "version": "1.0.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      },
-      "dialog": {
-        "all": true
-      },
-      "fs": {
-        "all": true,
-        "scope": ["$APP/*", "$DOCUMENT/*", "$DOWNLOAD/*"]
-      },
-      "path": {
-        "all": true
-      },
-      "clipboard": {
-        "all": true
-      },
-      "notification": {
-        "all": true
-      },
-      "globalShortcut": {
-        "all": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.securevault.app",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "windows": {
-        "certificateThumbprint": null,
-        "digestAlgorithm": "sha256",
-        "timestampUrl": ""
-      }
-    },
-    "security": {
-      "csp": null
-    },
-    "systemTray": {
-      "iconPath": "icons/icon.ico",
-      "iconAsTemplate": true
-    },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": "",
-      "wix": null,
-      "nsis": {
-        "installerIcon": "icons/icon.ico",
-        "headerImage": null,
-        "sidebarImage": null,
-        "installMode": "currentUser",
-        "languages": ["English"],
-        "displayLanguageSelector": false
-      }
+      "timestampUrl": ""
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
     }
   }
 }
