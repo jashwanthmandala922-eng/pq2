@@ -47,35 +47,36 @@ jobs:
 
   build-exe:
     name: Build Windows EXE
-    runs-on: windows-latest
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: windows
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repo
+        uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup Node.js
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: windows/package-lock.json
+          cache: 'npm'
+          cache-dependency-path: 'windows/package-lock.json'
 
-      - name: Install frontend dependencies
-        working-directory: windows
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node dependencies
         run: npm ci
 
-      - name: Build frontend (Vite)
-        working-directory: windows
+      - name: Build frontend
         run: npm run build
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli
 
       - name: Build EXE
-        working-directory: windows
-        run: |
-          $env:Path += ";$env:USERPROFILE\.cargo\bin"
-          cargo tauri build
+        run: cargo tauri build
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
