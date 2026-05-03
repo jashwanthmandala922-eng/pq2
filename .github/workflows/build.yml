@@ -2,20 +2,17 @@ name: Build APK and EXE
 
 on:
   push:
-    branches: [master, main ]
+    branches: [master, main]
   workflow_dispatch:
 
 jobs:
   build-rust:
-    name: Build & Test Rust Core
+    name: Build Rust Core
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Check Rust Core
         run: cd securevault-core && cargo check
@@ -37,7 +34,10 @@ jobs:
       - uses: android-actions/setup-android@v2
 
       - name: Build APK
-        run: cd android && ./gradlew assembleDebug
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -51,15 +51,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-
       - name: Install Tauri CLI
         run: cargo install tauri-cli
 
       - name: Build EXE
-        run: cd windows && cargo tauri build
+        working-directory: windows
+        run: |
+          $env:Path += ";$env:USERPROFILE\.cargo\bin"
+          cargo tauri build
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4

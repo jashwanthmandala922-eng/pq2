@@ -125,9 +125,6 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
 
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 tasks.register('launchMainActivity', Void) {
     doLast {
         println "SecureVault Android app configured successfully"
